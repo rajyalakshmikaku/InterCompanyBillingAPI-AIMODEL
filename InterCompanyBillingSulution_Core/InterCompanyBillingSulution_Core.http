@@ -1,0 +1,6 @@
+@InterCompanyBillingSulution_Core_HostAddress = http://localhost:5129
+
+GET {{InterCompanyBillingSulution_Core_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

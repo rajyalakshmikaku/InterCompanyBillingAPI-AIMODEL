@@ -1,0 +1,21 @@
+﻿# Old Git repository backup
+
+.git_backup/
+
+# .NET generated files
+
+**/bin/
+**/obj/
+.vs/
+*.user
+*.suo
+
+# Sensitive configuration
+
+appsettings.Development.json
+.env
+.env.*
+
+# Uploaded payment documents
+
+**/PaymentUploads/
