@@ -1,6 +1,7 @@
 ﻿using InterCompanyBillingSulution.DataAcess.Data;
 using InterCompanyBillingSulution.Models.DTO;
 using InterCompanyBillingSulution_Core;
+using InterCompanyBillingSulution_Core.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -114,6 +115,9 @@ builder.Services.AddAuthentication(options =>
 });
 
 builder.Services.AddAuthorization();
+builder.Services.AddHttpClient<PythonAIService>(c => c.Timeout = TimeSpan.FromMinutes(5));
+builder.Services.AddScoped<DataQueryService>();
+
 
 var app = builder.Build();
 
