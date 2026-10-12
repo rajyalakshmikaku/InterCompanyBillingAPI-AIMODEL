@@ -115,7 +115,22 @@ builder.Services.AddAuthentication(options =>
 });
 
 builder.Services.AddAuthorization();
-builder.Services.AddHttpClient<PythonAIService>(c => c.Timeout = TimeSpan.FromMinutes(5));
+builder.Services.AddHttpClient<PythonAIService>(c => c.Timeout = TimeSpan.FromMinutes(5))
+    .ConfigurePrimaryHttpMessageHandler(() =>
+    {
+        var handler = new HttpClientHandler();
+        // The AI server uses an internal certificate. Instead of disabling validation, trust exactly that one
+        // certificate: set JanAI:CertThumbprint (or install the certificate in the Windows trusted store).
+        var pinned = builder.Configuration["JanAI:CertThumbprint"]?.Replace(":", "").Replace(" ", "");
+        if (!string.IsNullOrEmpty(pinned))
+        {
+            handler.ServerCertificateCustomValidationCallback = (_, cert, _, errors) =>
+                errors == System.Net.Security.SslPolicyErrors.None ||
+                string.Equals(cert?.GetCertHashString(System.Security.Cryptography.HashAlgorithmName.SHA256), pinned,
+                    StringComparison.OrdinalIgnoreCase);
+        }
+        return handler;
+    });
 builder.Services.AddScoped<DataQueryService>();
 
 

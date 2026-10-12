@@ -70,29 +70,41 @@ namespace InterCompanyBillingSulution_Core.Controllers
 
             try
             {
-                // Ask the model what the question is about; answer from the DB if it is a data question.
-                string? dbAnswer = null;
-                if (User.Identity?.IsAuthenticated == true && DataQueryService.AsksForData(request.Message))
+                var message = request.Message.Trim();
+                string? response = null;
+
+                // 1) Data questions (counts, totals, latest/highest...) are answered from the database,
+                //    for signed-in users only. The model only classifies; it never writes SQL.
+                //    Follow-ups such as "give those users names" are resolved against the previous question.
+                var withContext = DataQueryService.WithContext(message, request.History);
+                if (User.Identity?.IsAuthenticated == true && DataQueryService.AsksForData(withContext))
                 {
-                    var query = DataQueryService.TryParse(request.Message)
-                                ?? await _pythonAIService.ClassifyAsync(request.Message);
-                    dbAnswer = query == null ? null : await _dataQueryService.AnswerAsync(query);
+                    try
+                    {
+                        var query = DataQueryService.TryParse(message) ?? await _pythonAIService.ClassifyAsync(withContext);
+                        response = query == null ? null : await _dataQueryService.AnswerAsync(query);
+                    }
+                    catch (Exception)
+                    {
+                        // Classification/DB problem: fall through and let the model answer generally.
+                    }
                 }
 
-                // Otherwise (e.g. "how to generate a quotation") answer straight from the help text;
-                // only fall back to the (slow) LLM when no help screen matches.
-                var response = dbAnswer ?? await _dataQueryService.GetHelpAnswerAsync(request.Message);
+                // 2) Everything else - how-to, concepts, advanced usage or general questions - is answered by the model,
+                //    grounded in the application overview and the best-matching help screens.
                 if (response == null)
                 {
+                    var (prompt, helpOnly, isApp) = await _dataQueryService.BuildKnowledgePromptAsync(message);
                     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(240));
                     try
                     {
-                        response = await _pythonAIService.GenerateResponse(
-                            request.Message, cts.Token);
+                        // General questions (not about the billing app) use a plain prompt with no application context.
+                        response = await _pythonAIService.GenerateResponse(prompt, cts.Token, general: !isApp);
                     }
-                    catch (OperationCanceledException)
+                    catch (Exception ex) when (ex is OperationCanceledException or HttpRequestException)
                     {
-                        response = "I couldn't find an answer to that in the application help, and the AI model took too long to respond. Please rephrase your question, e.g. \"How to create a quotation?\" or \"How many approved invoices?\"";
+                        // AI server unavailable: still give the user the help text if we have it.
+                        response = helpOnly ?? "The AI assistant is not reachable right now. Please try again in a moment.";
                     }
                 }
 
